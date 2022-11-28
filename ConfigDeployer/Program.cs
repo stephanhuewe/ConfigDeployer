@@ -1,61 +1,59 @@
 ﻿using Renci.SshNet;
+using Salaros.Configuration;
 
 class Program
 {
     static void Main(string[] args)
     {
+        var configFileFromPath = new ConfigParser("config.cnf");
+        string configFile = configFileFromPath.GetValue("Config", "configfile");    
+        string hostOrIP = configFileFromPath.GetValue("Server", "hostOrIP");
+        string port = configFileFromPath.GetValue("Server", "port");
+        string username = configFileFromPath.GetValue("Server", "username");
+        string password = configFileFromPath.GetValue("Server", "password");
+             
 
         // Setup Credentials and Server Information
-        ConnectionInfo ConnNfo = new ConnectionInfo("hostOrIP", 22, "username",
+        ConnectionInfo ConnNfo = new ConnectionInfo(hostOrIP, Int32.Parse(port), username,
             new AuthenticationMethod[]{
 
                 // Pasword based Authentication
-                new PasswordAuthenticationMethod("username","password"),
-
-                // Key Based Authentication (using keys in OpenSSH Format)
-                new PrivateKeyAuthenticationMethod("username",new PrivateKeyFile[]{
-                    new PrivateKeyFile(@"..\openssh.key","passphrase")
-                }),
+                new PasswordAuthenticationMethod(username,password)                
             }
         );
 
-        // Execute a (SHELL) Command - prepare upload directory
-        using (var sshclient = new SshClient(ConnNfo))
-        {
-            sshclient.Connect();
-            using (var cmd = sshclient.CreateCommand("mkdir -p /tmp/uploadtest && chmod +rw /tmp/uploadtest"))
-            {
-                cmd.Execute();
-                Console.WriteLine("Command>" + cmd.CommandText);
-                Console.WriteLine("Return Value = {0}", cmd.ExitStatus);
-            }
-            sshclient.Disconnect();
-        }
+        string SourceConfigFile = configFileFromPath.GetValue("Config", "SourceConfigFile");
+        string TargetConfigFile = configFileFromPath.GetValue("Config", "TargetConfigFile");
+        string TargetConfigPath = configFileFromPath.GetValue("Config", "TargetConfigPath");
 
-        // Upload A File
+        // deploy config file
         using (var sftp = new SftpClient(ConnNfo))
         {
-            string uploadfn = "Renci.SshNet.dll";
+            string uploadfn = SourceConfigFile;
 
             sftp.Connect();
-            sftp.ChangeDirectory("/tmp/uploadtest");
-            using (var uplfileStream = System.IO.File.OpenRead(uploadfn))
+            sftp.ChangeDirectory(TargetConfigPath);
+            using (var uplfileStream = File.OpenRead(uploadfn))
             {
-                sftp.UploadFile(uplfileStream, uploadfn, true);
+                sftp.UploadFile(uplfileStream, TargetConfigFile, true);
             }
             sftp.Disconnect();
         }
 
-        // Execute (SHELL) Commands
-        using (var sshclient = new SshClient(ConnNfo))
-        {
-            sshclient.Connect();
+        string servicename = configFileFromPath.GetValue("Config", "servicename");
+        bool restart = bool.Parse(configFileFromPath.GetValue("Config", "restart"));
 
-            // quick way to use ist, but not best practice - SshCommand is not Disposed, ExitStatus not checked...
-            Console.WriteLine(sshclient.CreateCommand("cd /tmp && ls -lah").Execute());
-            Console.WriteLine(sshclient.CreateCommand("pwd").Execute());
-            Console.WriteLine(sshclient.CreateCommand("cd /tmp/uploadtest && ls -lah").Execute());
-            sshclient.Disconnect();
+        if (restart)
+        {
+
+            // Execute (SHELL) Commands
+            using (var sshclient = new SshClient(ConnNfo))
+            {
+                sshclient.Connect();
+
+                Console.WriteLine(sshclient.CreateCommand($"/etc/init.d/{servicename} restart").Execute());
+                sshclient.Disconnect();
+            }
         }
         Console.ReadKey();
     }

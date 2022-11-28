@@ -1,0 +1,14 @@
+﻿[Server]
+hostOrIP = 192.168.0.1
+port = 22
+username = root
+passwort = p@ssword
+
+[Config]
+SourceConfigFile = myconfig.conf
+TargetConfigFile = myconfig.conf
+TargetConfigPath = /etc
+
+[Service]
+servicename = servicename
+restart = yes
